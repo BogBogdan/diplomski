@@ -1,0 +1,4 @@
+# Ignorisi folder sa podacima
+data/
+.env
+venv/
