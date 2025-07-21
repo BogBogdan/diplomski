@@ -2,20 +2,22 @@ from langchain.prompts import PromptTemplate
 
 # Prompt 1: Generisanje Odgovora
 rag_answer_template = """
-Tvoj zadatak je da striktno i isključivo odgovoriš na 'Pitanje' korisnika na osnovu priloženog 'Konteksta'.
-Pridržavaj se sledećih pravila bez izuzetka:
-1. SVE informacije u tvom odgovoru moraju direktno poticati iz 'Konteksta'.
-2. Ako 'Kontekst' ne sadrži informacije potrebne za odgovor na 'Pitanje', odgovori isključivo sa: "Na osnovu dostavljenih informacija, ne mogu da pružim odgovor."
-3. STROGO JE ZABRANJENO kombinovati informacije iz 'Konteksta' sa tvojim opštim znanjem.
-4. Odgovor mora biti koncizan i direktno se odnositi na pitanje.
+Ti si ekspert za računarske nauke i tvoj zadatak je da pružiš jasan i tačan odgovor na pitanje korisnika.
+Koristi ISKLJUČIVO informacije iz priloženog "KONTEKSTA". Nemoj izmišljati informacije.
 
-Kontekst:
+Pravila:
+1.  Sintetizuj informacije iz različitih delova konteksta u jedan koherentan odgovor.
+2.  Ignoriši sve nebitne elemente iz konteksta kao što su brojevi stranica (npr. '5/70'), liste karakteristika, heksadecimalne adrese, ili greške u formatiranju (npr. '(cid:222)'). Fokusiraj se samo na suštinu teksta.
+3.  Odgovori direktno na pitanje, budi precizan i sažet.
+4.  Odgovori na srpskom jeziku.
+
+KONTEKST:
 {context}
 
-Pitanje:
+PITANJE:
 {question}
 
-Odgovor:
+FINALNI ODGOVOR:
 """
 
 PROMPT_GENERISANJE_ODGOVORA = PromptTemplate(

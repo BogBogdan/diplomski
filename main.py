@@ -6,9 +6,8 @@ from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-# Učitavamo promenljive iz .env fajla na samom početku
 load_dotenv()
-# LangChain i FAISS komponente za RAG
+
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 
@@ -95,7 +94,7 @@ async def handle_pitanje(request_data: PitanjeRequest):
     print("Korak 2: Pretraga vektorske baze...")
     docs = db.similarity_search(obradjeno_pitanje, k=4)
     context = "\n---\n".join([doc.page_content for doc in docs])
-
+    print(context)
     # Korak 3: Generisanje odgovora na osnovu konteksta
     print("Korak 3: Generisanje finalnog odgovora...")
     prompt_za_odgovor = PROMPT_GENERISANJE_ODGOVORA.format(context=context, question=originalno_pitanje)

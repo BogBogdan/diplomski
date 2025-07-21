@@ -9,7 +9,7 @@ API_URL = "http://127.0.0.1:8000/pitanje"
 # Pitanje koje želiš da pošalješ
 # Slobodno promeni ovo pitanje u bilo šta što želiš da testiraš
 pitanje_payload = {
-    "pitanje": "Kako Sanjač opisuje grad Peterburg i svoju usamljenost na samom početku pripovetke?"
+    "pitanje": " Da li bi mogao da mi kazes sta memorijski prostor?"
 }
 
 print(f"--- Slanje zahteva na endpoint: {API_URL} ---")
