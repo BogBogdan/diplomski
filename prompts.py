@@ -60,20 +60,23 @@ PROMPT_PREFORMULISANJE_PITANJA = PromptTemplate(
 # Očekivani izlaz: Kako sprečiti halucinacije kod AI modela?
 
 # Prompt 3: Provera Tačnosti Odgovora
-answer_verification_template = """
-Ti si precizan i nepristrasan AI evaluator. Tvoj jedini zadatak je da proceniš da li je dati 'Odgovor' tačan i u potpunosti podržan informacijama iz priloženog 'Konteksta'.
+# Prompt 4: Numeričko Ocenjivanje Tačnosti
+answer_grading_template = """
+Ti si rigorozan i objektivan AI asistent za ocenjivanje. Tvoj zadatak je da oceniš tačnost datog 'Odgovora' u odnosu na 'Kontekst' na skali od 0 do 10.
 
 Sledi ove korake:
-1. Pažljivo pročitaj 'Pitanje' da razumeš šta se traži.
-2. Pažljivo pročitaj 'Kontekst' da identifikuješ relevantne činjenice.
-3. Uporedi svaku tvrdnju iz 'Odgovora' sa činjenicama iz 'Konteksta'.
+1. Pažljivo pročitaj 'Pitanje' da razumeš suštinu onoga što se traži.
+2. Analiziraj 'Kontekst' i izdvoj sve ključne činjenice, koncepte i relacije potrebne za potpun odgovor.
+3. Uporedi 'Odgovor koji se proverava' sa ključnim informacijama iz 'Konteksta'.
 
-Nakon analize, donesi konačnu ocenu koristeći jednu od sledećih kategorija:
-- TAČAN: Sve tvrdnje u odgovoru su direktno podržane kontekstom.
-- DELIMIČNO TAČAN: Neke tvrdnje u odgovoru su tačne i podržane kontekstom, ali neke nisu ili su izostavljene važne informacije.
-- NETAČAN: Tvrdnje u odgovoru su u suprotnosti sa kontekstom ili nisu uopšte spomenute u njemu.
+Dodeli ocenu prema sledećim kriterijumima:
+- 10/10 (Potpuno tačan): Sve tvrdnje u odgovoru su tačne, potpune i direktno podržane kontekstom. Odgovor je sveobuhvatan.
+- 7-9/10 (Uglavnom tačan): Odgovor je suštinski tačan, ali nedostaju neki manji detalji ili preciznost.
+- 4-6/10 (Delimično tačan): Odgovor sadrži i tačne i netačne tvrdnje, ili su izostavljene ključne informacije. Pokazuje osnovno razumevanje, ali sa značajnim propustima.
+- 1-3/10 (Uglavnom netačan): Većina tvrdnji u odgovoru je netačna ili nije podržana kontekstom.
+- 0/10 (Potpuno netačan): Nijedna tvrdnja u odgovoru nije podržana kontekstom ili je odgovor u potpunoj suprotnosti sa njim.
 
-Tvoj izlaz mora striktno da prati sledeći format, sa objašnjenjem za tvoju odluku.
+Tvoj izlaz mora striktno da prati sledeći format.
 
 Pitanje:
 {question}
@@ -86,12 +89,12 @@ Odgovor koji se proverava:
 
 ---
 TVOJA EVALUACIJA:
-OCENA: [Ovde unesi jednu od tri kategorije: TAČAN, DELIMIČNO TAČAN, NETAČAN]
-OBJAŠNJENJE: [Ovde unesi kratko i jasno objašnjenje zašto si doneo takvu ocenu, pozivajući se na specifične delove konteksta.]
+OCENA: [Ovde unesi samo numeričku ocenu u formatu X/10, na primer: 8/10]
+OBJAŠNJENJE: [Ovde unesi kratko i jasno objašnjenje zašto si dodelio tu ocenu, pozivajući se na specifične delove konteksta i kriterijume.]
 """
 
 PROMPT_PROVERA_TACNOSTI = PromptTemplate(
-    template=answer_verification_template, input_variables=["question", "context", "answer"]
+    template=answer_grading_template, input_variables=["question", "context", "answer"]
 )
 
 # Primer korišćenja (fiktivni)
