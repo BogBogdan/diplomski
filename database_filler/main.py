@@ -97,7 +97,7 @@ def prevedi_poene_u_ocenu(poeni: float) -> int:
     """Pretvara poene (0-100) u numeričku ocenu (1-4)."""
     if poeni >= 65: # Pragovi se mogu podesiti po potrebi
         return 4
-    elif poeni >= 45:
+    elif poeni >= 39:
         return 3
     elif poeni >= 20:
         return 2
