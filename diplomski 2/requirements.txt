@@ -1,0 +1,35 @@
+# --- Web Framework & Server ---
+# Za kreiranje API-ja (FastAPI) i pokretanje servera (uvicorn)
+fastapi
+uvicorn
+
+# --- AI & LangChain ---
+# Osnovna LangChain biblioteka
+langchain
+
+# LangChain Community - za integracije sa FAISS, HuggingFace, itd.
+langchain-community
+langchain_huggingface
+
+# Za OpenAI (GPT) API
+openai
+
+# Za Google Gemini API
+google-generativeai
+
+# Za lokalne modele preko Ollame
+ollama
+
+# --- Vektorske Baze i Embeddings (Vector Stores & Embeddings) ---
+# Za korišćenje Hugging Face embedding modela
+sentence-transformers
+
+# Za FAISS vektorsku bazu (CPU verzija)
+faiss-cpu
+
+# --- Upravljanje podacima i okruženjem ---
+# Za učitavanje konfiguracije iz .env fajlova
+python-dotenv
+
+# Za obradu slika (PIL - Python Imaging Library)
+Pillow

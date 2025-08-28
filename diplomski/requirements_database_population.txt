@@ -1,0 +1,33 @@
+# --- Osnovne biblioteke za rad sa podacima ---
+numpy
+
+# --- Rad sa .env fajlovima za konfiguraciju ---
+python-dotenv
+
+# --- Obrada PDF dokumenata ---
+PyMuPDF
+
+# --- Rad sa slikama ---
+Pillow
+
+# --- LangChain i Vektorske Baze ---
+langchain
+langchain-text-splitters
+langchain-community  # Za FAISS i HuggingFaceEmbeddings wrappere
+
+# Za HuggingFace embedding modele
+sentence-transformers
+
+# Za FAISS vektorsku bazu (CPU verzija)
+faiss-cpu
+
+# --- AI Modeli i klijenti ---
+
+# Za Google Gemini API
+google-generativeai
+
+# Za OpenAI (GPT) API
+openai
+
+# Za lokalne modele preko Ollame
+ollama
