@@ -53,41 +53,6 @@ def pitaj_ai(poruka_korisnika: str, model: str = "gpt-3.5-turbo") -> str:
     except Exception as e:
         return f"Greška prilikom poziva OpenAI API-ja: {e}"
 
-def pitaj_gemini_sa_slikama(prompt_tekst: str, lista_putanja_slika: List[str], model: str = "gemini-1.5-flash-latest") -> str:
-    """
-    Šalje tekstualni prompt i listu slika Gemini modelu.
-    Ako slika na nekoj putanji ne postoji ili se ne može učitati, tiho je preskače i nastavlja sa ostalima.
-    """
-    if not gemini_configured:
-        return "Greška: Google Gemini klijent nije pravilno konfigurisan. Proverite API ključ."
-
-    try:
-        # Odabir modela
-        generative_model = genai.GenerativeModel(model)
-        
-        # Priprema sadržaja: Prvi element je tekst, a zatim slike
-        sadrzaj_za_slanje = [prompt_tekst]
-        
-        for putanja in lista_putanja_slika:
-            try:
-                # Pokušavamo da učitamo sliku
-                slika = Image.open(putanja)
-                # Ako je uspešno, dodajemo je u listu za slanje
-                sadrzaj_za_slanje.append(slika)
-            except Exception:
-                # Ako dođe do BILO KAKVE greške pri otvaranju slike (ne postoji, oštećena je...),
-                # samo prelazimo na sledeću sliku bez prekida i bez poruke.
-                continue
-        
-        # Slanje zahteva sa svim slikama koje su uspešno učitane
-        response = generative_model.generate_content(sadrzaj_za_slanje)
-        
-        return response.text
-        
-    except Exception as e:
-        # Ovaj blok sada hvata samo greške vezane za Gemini API, ne za učitavanje fajlova.
-        return f"Greška prilikom poziva Gemini API-ja: {e}"
-
 def pitaj_gemini(poruka_korisnika: str, model: str = "gemini-1.5-flash-latest") -> str:
     """
     Šalje poruku Google Gemini API-ju i vraća odgovor modela.
@@ -103,6 +68,7 @@ def pitaj_gemini(poruka_korisnika: str, model: str = "gemini-1.5-flash-latest") 
         return response.text
     except Exception as e:
         return f"Greška prilikom poziva Google Gemini API-ja: {e}"
+
 
 def pitaj_ollama(poruka_korisnika: str, model: str = "llama3") -> str:
     """
