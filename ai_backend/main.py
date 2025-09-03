@@ -16,13 +16,11 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.prompts import PromptTemplate
 from ai_functions import pitaj_ollama, pitaj_ai, pitaj_gemini
-# =================================================================
-# === ISPRAVKA: Uvozimo TAČNE nazive template stringova iz prompts.py ===
-# =================================================================
 from prompts import (
     prompt_triage_tree_template,
-    prompt_kreiraj_ceklistu_template,      # <-- ISPRAVLJEN NAZIV
-    prompt_oceni_po_ceklisti_template     # <-- ISPRAVLJEN NAZIV
+    prompt_kreiraj_ceklistu_template,
+    prompt_oceni_po_ceklisti_template,
+    prompt_generisi_varijacije_pitanja_template
 )
 from parallel_search import izvrsi_paralelnu_pretragu
 
@@ -41,34 +39,29 @@ else:    raise ValueError(f"Nepoznat AI_PROVIDER: '{AI_PROVIDER}'.")
 
 print(f"--- Konfiguracija: AI Provider={AI_PROVIDER.upper()}, Model='{INTERNI_MODEL_NAZIV}' ---")
 
-# =================================================================
-# === ISPRAVKA: Definišemo PromptTemplate objekte sa TAČNIM nazivima ===
-# =================================================================
 PROMPT_TRIAGE_TREE = PromptTemplate(
     template=prompt_triage_tree_template,
     input_variables=["question", "answer"]
 )
 PROMPT_KREIRAJ_CEKLISTU = PromptTemplate(
-    template=prompt_kreiraj_ceklistu_template,   # <-- ISPRAVLJEN NAZIV
+    template=prompt_kreiraj_ceklistu_template,
     input_variables=["question"]
 )
 PROMPT_OCENI_PO_CEKLISTI = PromptTemplate(
-    template=prompt_oceni_po_ceklisti_template, # <-- ISPRAVLJEN NAZIV
+    template=prompt_oceni_po_ceklisti_template,
     input_variables=["answer", "checklist_json", "context"]
+)
+PROMPT_GENERISI_VARIJACIJE = PromptTemplate(
+    template=prompt_generisi_varijacije_pitanja_template,
+    input_variables=["original_question"]
 )
 
 # --- GLOBALNE PROMENLJIVE I KEŠ ---
 app = FastAPI(title="Finalni Hibridni RAG API")
-db = None
+db = None # db se više ne koristi direktno u API endpointu, ali ostaje radi startup logike
 embeddings = None
 context_cache = {}
 evaluation_cache = {}
-
-# --- POMOĆNE FUNKCIJE ---
-def izvadi_sugestije_kao_listu(objekat: Dict[str, Any]) -> List[str]:
-    lista_sugestija = objekat.get('suggestedAnswer', [])
-    if not isinstance(lista_sugestija, list): return []
-    return [p.get('name') for p in lista_sugestija if isinstance(p, dict) and p.get('name')]
 
 # --- FastAPI Middleware i Startup ---
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -80,12 +73,14 @@ def load_rag_components():
         print(f"GREŠKA: Vektorska baza '{DB_FAISS_PATH}' nije pronađena!")
         return
     try:
+        # Učitavamo samo embeddings. `db` objekat više nije neophodan globalno za API pozive.
         embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL, model_kwargs={'device': 'cpu'})
-        db = FAISS.load_local(DB_FAISS_PATH, embeddings, allow_dangerous_deserialization=True)
-        print("--- RAG komponente uspešno učitane. ---")
+        # Možemo uraditi probno učitavanje da potvrdimo da je baza ispravna
+        db_test = FAISS.load_local(DB_FAISS_PATH, embeddings, allow_dangerous_deserialization=True)
+        print("--- RAG komponente (Embeddings i test baze) uspešno učitane. ---")
     except Exception as e:
         print(f"Greška pri učitavanju RAG komponenti: {e}")
-        db = None
+        embeddings = None
 
 class EvaluacijaRequest(BaseModel):
     pitanje: str
@@ -94,20 +89,15 @@ class EvaluacijaRequest(BaseModel):
     predmet: str = None
 
 def prevedi_poene_u_ocenu(poeni: float) -> int:
-    """Pretvara poene (0-100) u numeričku ocenu (1-4)."""
-    if poeni >= 65: # Pragovi se mogu podesiti po potrebi
-        return 4
-    elif poeni >= 39:
-        return 3
-    elif poeni >= 20:
-        return 2
-    else:
-        return 1
+    if poeni >= 65: return 4
+    elif poeni >= 39: return 3
+    elif poeni >= 20: return 2
+    else: return 1
 
 @app.post("/proveri-odgovor")
 async def handle_evaluacija(request_data: EvaluacijaRequest):
-    if db is None:
-        raise HTTPException(status_code=503, detail="Vektorska baza nije učitana.")
+    if embeddings is None: # Proveravamo samo da li su embeddings učitani
+        raise HTTPException(status_code=503, detail="Vektorska baza (ili embeddings) nije učitana.")
 
     originalno_pitanje = request_data.pitanje
     odgovor_za_proveru = request_data.odgovor
@@ -124,10 +114,7 @@ async def handle_evaluacija(request_data: EvaluacijaRequest):
     # === FAZA 1: BRZA TRIJAŽA (0, 5, ili "IZMEĐU") ===
     print("Faza 1: Izvršavanje brze trijaže...")
     try:
-        prompt_za_triage = PROMPT_TRIAGE_TREE.format(
-            question=originalno_pitanje,
-            answer=odgovor_za_proveru
-        )
+        prompt_za_triage = PROMPT_TRIAGE_TREE.format(question=originalno_pitanje, answer=odgovor_za_proveru)
         triage_str = INTERNI_AI_POZIV(prompt_za_triage, model=INTERNI_MODEL_NAZIV)
         triage_data = json.loads(re.sub(r'^\s*```[a-z-]*\n|\n```\s*$', '', triage_str.strip()))
         triage_rezultat = triage_data.get("triage_rezultat")
@@ -135,33 +122,54 @@ async def handle_evaluacija(request_data: EvaluacijaRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Greška tokom faze trijaže: {e}")
 
-    # --- AKO JE OCENA 0 ILI 5, ZAVRŠAVAMO ODMAH ---
     if triage_rezultat == 0 or triage_rezultat == 5:
         print("Faza 1.1: Odgovor je ekstreman (0 ili 5). Vraćam direktan rezultat.")
-        finalni_podaci = {
-            "ocena_numericka": triage_rezultat,
-            "ocenjene_stavke": [],
-            "rezime_evaluacije": triage_data.get("obrazloženje", "Evaluacija završena u fazi trijaže.")
-        }
+        finalni_podaci = {"ocena_numericka": triage_rezultat, "ocenjene_stavke": [], "rezime_evaluacije": triage_data.get("obrazloženje", "Evaluacija završena u fazi trijaže.")}
         evaluation_cache[eval_cache_key] = {'data': finalni_podaci, 'timestamp': current_time}
         return finalni_podaci
 
-    # === AKO JE ODGOVOR "IZMEĐU", POKREĆEMO DETALJNU ANALIZU ===
     print("Faza 2: Odgovor zahteva detaljnu analizu.")
 
+    # FAZA 2.1: Generisanje podataka za pretragu
+    print("Faza 2.1: Generisanje varijacija pitanja za poboljšanu pretragu.")
+    slicna_pitanja, potencijalni_odgovor, kljucne_reci = [], "", []
     try:
-        rezultati_pretrage = izvrsi_paralelnu_pretragu(
-            pitanje=originalno_pitanje,
-            db=db,
-            k=BROJ_REZULTATA,  # Koristimo konstantu iz konfiguracije
+        prompt_za_varijacije = PROMPT_GENERISI_VARIJACIJE.format(original_question=originalno_pitanje)
+        varijacije_str = INTERNI_AI_POZIV(prompt_za_varijacije, model=INTERNI_MODEL_NAZIV)
+        cist_json_varijacija = re.sub(r'^\s*```[a-z-]*\n|\n```\s*$', '', varijacije_str.strip())
+        generisani_podaci = json.loads(cist_json_varijacija)
+
+        slicna_pitanja = generisani_podaci.get("slicna_pitanja", [])
+        potencijalni_odgovor = generisani_podaci.get("potencijalni_odgovor", "")
+        kljucne_reci = generisani_podaci.get("kljucne_reci", [])
+
+        print(f" -> Generisano sličnih pitanja: {len(slicna_pitanja)}")
+        print(f" -> Generisan potencijalni odgovor: {'Da' if potencijalni_odgovor else 'Ne'}")
+        print(f" -> Generisano ključnih reči: {kljucne_reci}")
+
+    except Exception as e:
+        print(f"UPOZORENJE: Greška pri generisanju varijacija pitanja: {e}. Nastavljam sa osnovnom pretragom.")
+
+    try:
+        # =================================================================
+        # === POZIV ISPRAVLJEN U SKLADU SA TVOJOM DEFINICIJOM FUNKCIJE ===
+        # =================================================================
+        rezultati_pretrage = await izvrsi_paralelnu_pretragu(
+            originalno_pitanje=originalno_pitanje,
+            slicna_pitanja=slicna_pitanja,
+            provera_odgovor=potencijalni_odgovor,
+            provera_kljucne_reci=kljucne_reci,
+            db_path=DB_FAISS_PATH,              # <-- ISPRAVLJENO: Prosleđuje se putanja do baze
+            embeddings=embeddings,              # <-- ISPRAVLJENO: Prosleđuje se embeddings objekat
+            predmet=predmet,
             lekcija=lekcija,
-            predmet=predmet
+            broj_rezultata=BROJ_REZULTATA        # <-- ISPRAVLJENO: Ime parametra je 'broj_rezultata'
         )
+        # =================================================================
 
         if rezultati_pretrage and isinstance(rezultati_pretrage, list):
-             pronadjen_kontekst = "\n\n---\n\n".join(
-                [str(rezultat) for rezultat in rezultati_pretrage]
-            )
+             print(f"Paralelna pretraga vratila {len(rezultati_pretrage)} rezultata.")
+             pronadjen_kontekst = "\n\n---\n\n".join([str(rezultat) for rezultat in rezultati_pretrage])
         else:
             pronadjen_kontekst = "Nije pronađen relevantan kontekst putem paralelne pretrage."
             
@@ -172,58 +180,42 @@ async def handle_evaluacija(request_data: EvaluacijaRequest):
         print(f"Greška tokom izvršavanja paralelne pretrage: {e}")
         pronadjen_kontekst = "Greška pri dobijanju konteksta."
 
+
+
     # KORAK 2.2: KREIRANJE ČEK-LISTE
     print("Faza 2.2: Kreiranje ček-liste za detaljno ocenjivanje.")
+    print("NEKA PRIMENA EVO JE "+ pronadjen_kontekst)
     try:
-            # Korak A: AI generiše samo listu stavki
-            prompt_za_stavke = PROMPT_KREIRAJ_CEKLISTU.format(question=originalno_pitanje)
-            stavke_str = INTERNI_AI_POZIV(prompt_za_stavke, model=INTERNI_MODEL_NAZIV)
-            cist_json_str = re.sub(r'^\s*```[a-z-]*\n|\n```\s*$', '', stavke_str.strip())
-            generisane_stavke_data = json.loads(cist_json_str)
-            lista_stavki = generisane_stavke_data.get("stavke_za_proveru", [])
+        prompt_za_stavke = PROMPT_KREIRAJ_CEKLISTU.format(question=originalno_pitanje)
+        stavke_str = INTERNI_AI_POZIV(prompt_za_stavke, model=INTERNI_MODEL_NAZIV)
+        cist_json_str = re.sub(r'^\s*```[a-z-]*\n|\n```\s*$', '', stavke_str.strip())
+        generisane_stavke_data = json.loads(cist_json_str)
+        lista_stavki = generisane_stavke_data.get("stavke_za_proveru", [])
 
-            if not lista_stavki:
-                raise ValueError("AI nije uspeo da generiše stavke za proveru.")
+        if not lista_stavki:
+            raise ValueError("AI nije uspeo da generiše stavke za proveru.")
 
-            # Korak B: Naš kod radi matematiku - ovo je pouzdano
-            broj_stavki = len(lista_stavki)
-            poeni_po_stavci = round(100 / broj_stavki, 2)
-
-            # Korak C: Kreiramo finalnu ček-listu sa poenima
-            finalna_ceklista_lista = []
-            for stavka_text in lista_stavki:
-                finalna_ceklista_lista.append({
-                    "stavka": stavka_text,
-                    "max_poena": poeni_po_stavci
-                })
-            
-            # Kreiramo JSON string koji će biti prosleđen sledećem promptu
-            checklist_json = json.dumps(finalna_ceklista_lista)
-            
-            print(f"Generisano {broj_stavki} stavki, svaka nosi {poeni_po_stavci} poena.")
+        broj_stavki = len(lista_stavki)
+        poeni_po_stavci = round(100 / broj_stavki, 2)
+        finalna_ceklista_lista = [{"stavka": stavka_text, "max_poena": poeni_po_stavci} for stavka_text in lista_stavki]
+        checklist_json = json.dumps(finalna_ceklista_lista)
+        
+        print(f"Generisano {broj_stavki} stavki, svaka nosi {poeni_po_stavci} poena.")
 
     except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Greška pri kreiranju ček-liste: {e}")
+        raise HTTPException(status_code=500, detail=f"Greška pri kreiranju ček-liste: {e}")
 
     # KORAK 2.3: DETALJNO OCENJIVANJE PO POENIMA (1-4)
     print("Faza 2.3: Izvršavanje detaljnog ocenjivanja po poenima za ocene 1-4.")
     try:
-        prompt_za_ocenu = PROMPT_OCENI_PO_CEKLISTI.format(
-            answer=odgovor_za_proveru,
-            checklist_json=checklist_json,
-            context=pronadjen_kontekst
-        )
+        prompt_za_ocenu = PROMPT_OCENI_PO_CEKLISTI.format(answer=odgovor_za_proveru, checklist_json=checklist_json, context=pronadjen_kontekst)
         finalni_rezultat_str = INTERNI_AI_POZIV(prompt_za_ocenu, model=INTERNI_MODEL_NAZIV)
         ai_analiza = json.loads(re.sub(r'^\s*```[a-z-]*\n|\n```\s*$', '', finalni_rezultat_str.strip()))
-
-        # === POČETAK KLJUČNE ISPRAVKE ===
-        # Ne vraćamo direktan odgovor AI, već ga restrukturiramo.
         
         ukupno_poena = ai_analiza.get("ukupno_osvojeno_poena", 0)
         print(f"Ukupno osvojeno poena: {ukupno_poena}/100")
         numericka_ocena = prevedi_poene_u_ocenu(ukupno_poena)
         
-        # Kreiramo finalni JSON koji ima istu strukturu kao onaj za ocene 0 i 5.
         strukturirani_odgovor = {
             "ocena_numericka": numericka_ocena,
             "ocenjene_stavke": ai_analiza.get("detaljna_analiza_po_stavkama", []),
@@ -232,7 +224,6 @@ async def handle_evaluacija(request_data: EvaluacijaRequest):
         
         evaluation_cache[eval_cache_key] = {'data': strukturirani_odgovor, 'timestamp': current_time}
         return strukturirani_odgovor
-        # === KRAJ KLJUČNE ISPRAVKE ===
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Greška tokom finalne evaluacije po poenima: {e}")

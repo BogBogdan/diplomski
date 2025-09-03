@@ -2,6 +2,35 @@
 
 from langchain.prompts import PromptTemplate
 
+
+prompt_generisi_varijacije_pitanja_template = """
+Ti si AI asistent specijalizovan za poboljšanje pretrage informacija. Tvoj zadatak je da na osnovu originalnog pitanja korisnika generišeš dodatne podatke koji će pomoći u pronalaženju najrelevantnijih dokumenata.
+
+Molim te generiši sledeće:
+1.  `slicna_pitanja`: Lista od 3 do 5 alternativnih formulacija originalnog pitanja. Ove varijacije treba da pokriju različite načine na koje korisnik može postaviti isto pitanje.
+2.  `potencijalni_odgovor`: Sažet, činjenično tačan i verovatan odgovor na originalno pitanje. Ovaj hipotetički odgovor će se koristiti za pronalaženje dokumenata koji sadrže slične informacije.
+3.  `kljucne_reci`: Lista ključnih reči ili fraza izvučenih iz originalnog pitanja koje su najvažnije za pretragu.
+
+Tvoj odgovor MORA biti u striktnom JSON formatu, bez ikakvog dodatnog teksta pre ili posle JSON objekta.
+
+Struktura JSON-a treba da bude sledeća:
+{{
+  "slicna_pitanja": [
+    "string - alternativna formulacija 1",
+    "string - alternativna formulacija 2",
+    "string - alternativna formulacija 3"
+  ],
+  "potencijalni_odgovor": "string - sažet i verovatan odgovor na pitanje.",
+  "kljucne_reci": [
+    "ključna reč 1",
+    "ključna reč 2"
+  ]
+}}
+
+Originalno pitanje korisnika:
+"{original_question}"
+"""
+
 # =========================================================================================
 # === PROMPT 1: Brza Trijaža (sa BLAŽOM logikom za ocenu 5) ===
 # =========================================================================================
@@ -18,13 +47,13 @@ Prvo, razloži Originalno Pitanje na njegove osnovne, odvojene zahteve ili delov
 Sada, uporedi Odgovor studenta sa listom ključnih zahteva iz Koraka 1 i primeni JEDNO od sledeća tri pravila:
 
 -   **PRAVILO ZA OCENU 5 (Kompletan pokušaj):**
-    Dodeljuje se **ako odgovor POKUŠAVA da se osvrne na SVE ključne zahteve** identifikovane u Koraku 1. Nije bitno da li su detalji 100% tačni, već da je student prepoznao sve delove pitanja i ponudio odgovor za svaki od njih. Struktura odgovora prati strukturu pitanja.
+    Dodeljuje se **ako odgovor POKUŠAVA da se osvrne na SVE ključne zahteve** identifikovane u Koraku 1. Detalji ne moraju biti 100% tačni, **ali odgovor ne sme sadržati fundamentalno netačne informacije ili logičke kontradikcije koje potiru suštinu pitanja.**
 
 -   **PRAVILO ZA OCENU 0 (Irelevantan odgovor):**
     Dodeljuje se **ako odgovor ignoriše centralni zadatak pitanja i govori o potpuno drugoj temi.** Slučajno spominjanje jedne ključne reči nije dovoljno ako je ostatak teksta potpuno irelevantan.
 
--   **PRAVILO ZA DALJU ANALIZU (Nepotpun odgovor):**
-    Ovo je standardna procedura i primenjuje se **ako je BAREM JEDAN ključni zahtev iz pitanja u potpunosti izostavljen u odgovoru.** Takođe se primenjuje ako je odgovor toliko konfuzan da se ne može utvrditi da li su svi delovi pokriveni.
+-   **PRAVILO ZA DALJU ANALIZU (Nepotpun ili Nekonzistentan odgovor):**
+    Ovo je standardna procedura i primenjuje se **ako je BAREM JEDAN ključni zahtev iz pitanja u potpunosti izostavljen u odgovoru, ILI ako odgovor ne zadovoljava uslove iz PRAVILA ZA OCENU 5 zbog logičke kontradikcije. Ako u odgovoru postoje ne tačne informacije ide na dalju analizu.**
 
 <podaci_za_trijažu>
 Originalno Pitanje:
@@ -38,10 +67,9 @@ Odgovor studenta:
 Tvoj izlaz MORA biti isključivo JSON objekat sa ključevima "triage_rezultat" i "obrazloženje".
 
 PRIMERI IZLAZA:
-{{ "triage_rezultat": 5, "obrazloženje": "Odgovor se bavi svim ključnim zahtevima postavljenim u pitanju." }}
+{{ "triage_rezultat": 5, "obrazloženje": "Odgovor se bavi svim ključnim zahtevima postavljenim u pitanju i ne sadrži fundamentalne greške." }}
 {{ "triage_rezultat": 0, "obrazloženje": "Odgovor je suštinski van teme i ne odgovara na postavljeno pitanje." }}
-{{ "triage_rezultat": "ZA_DALJU_ANALIZU", "obrazloženje": "Odgovor je nepotpun, jer nedostaje osvrt na [navesti deo koji fali]." }}
-"""
+{{ "triage_rezultat": "ZA_DALJU_ANALIZU", "obrazloženje": "Odgovor sadrži logičku kontradikciju. Iako je strukturno kompletan, objašnjenje potire definiciju." }}"""
 
 # Unutar prompts.py
 
